@@ -1,3 +1,46 @@
+- [FastApi youtube Course](#fastapi-youtube-course)
+- [🚀 Cómo levantar una aplicación FastAPI](#-cómo-levantar-una-aplicación-fastapi)
+  - [🧪 1. Modo local (desarrollo)](#-1-modo-local-desarrollo)
+  - [🐳 2. Modo Docker (desarrollo o testing)](#-2-modo-docker-desarrollo-o-testing)
+  - [🔍 ¿Qué significa cada parte?](#-qué-significa-cada-parte)
+  - [🔐 3. Modo producción (Gunicorn + UvicornWorker)](#-3-modo-producción-gunicorn--uvicornworker)
+  - [⚙️ Diferencias entre Uvicorn y Gunicorn](#️-diferencias-entre-uvicorn-y-gunicorn)
+  - [✅ ¿Cuándo usar cada uno?](#-cuándo-usar-cada-uno)
+  - [Docker \& Docker Compose](#docker--docker-compose)
+- [🧠 Resumen de cómo FastAPI captura los parámetros](#-resumen-de-cómo-fastapi-captura-los-parámetros)
+  - [✅ GET](#-get)
+    - [🔹 1. Parámetros de ruta (path parameters)](#-1-parámetros-de-ruta-path-parameters)
+    - [🔹 2. Parámetros de consulta (query parameters)](#-2-parámetros-de-consulta-query-parameters)
+      - [Opción A: Declararlos individualmente](#opción-a-declararlos-individualmente)
+      - [Opción B: Usar un modelo Pydantic + `Depends`](#opción-b-usar-un-modelo-pydantic--depends)
+  - [✅ POST](#-post)
+    - [🔹 Datos complejos en el cuerpo (JSON)](#-datos-complejos-en-el-cuerpo-json)
+    - [🔹 Datos simples en el cuerpo (`str`, `int`, etc.)](#-datos-simples-en-el-cuerpo-str-int-etc)
+  - [✅ Conclusión](#-conclusión)
+- [📋 Uso de listas como parámetros de consulta (query) en FastAPI](#-uso-de-listas-como-parámetros-de-consulta-query-en-fastapi)
+  - [✅ Declarar listas en parámetros de función](#-declarar-listas-en-parámetros-de-función)
+  - [🔗 Cómo llamar al endpoint](#-cómo-llamar-al-endpoint)
+  - [⚙️ Otra opción: Usar modelo Pydantic + Depends (menos común)](#️-otra-opción-usar-modelo-pydantic--depends-menos-común)
+  - [🧠 Conclusión](#-conclusión-1)
+- [📮 Peticiones POST y PUT con FastAPI y Pydantic](#-peticiones-post-y-put-con-fastapi-y-pydantic)
+  - [✅ Uso de `Body(...)` en FastAPI](#-uso-de-body-en-fastapi)
+    - [🔹 Sintaxis básica](#-sintaxis-básica)
+    - [🔹 ¿Qué significa `...`?](#-qué-significa-)
+    - [🔹 Otros usos comunes](#-otros-usos-comunes)
+  - [📥 `POST` con modelo Pydantic](#-post-con-modelo-pydantic)
+    - [🔸 JSON esperado:](#-json-esperado)
+  - [🔁 `PUT` con modelo Pydantic (actualización parcial)](#-put-con-modelo-pydantic-actualización-parcial)
+    - [🔹 Endpoint PUT con `exclude_unset=True`:](#-endpoint-put-con-exclude_unsettrue)
+  - [✏️ `PUT` con datos simples (sin modelo)](#️-put-con-datos-simples-sin-modelo)
+    - [🔸 JSON esperado:](#-json-esperado-1)
+    - [🔹 Varios valores simples:](#-varios-valores-simples)
+  - [⚠️ Cuidado: sin `Body(...)` FastAPI lo busca en la query](#️-cuidado-sin-body-fastapi-lo-busca-en-la-query)
+  - [✅ Conclusión](#-conclusión-2)
+  - [Integrando bbdd postgres](#integrando-bbdd-postgres)
+    - [Storing data using SQLModel](#storing-data-using-sqlmodel)
+    - [Variables de entorno](#variables-de-entorno)
+    - [Uso de SQLModel](#uso-de-sqlmodel)
+
 # FastApi youtube Course
 
 source : https://www.youtube.com/watch?v=tiBeLLv5GJo&t=1647s
@@ -459,6 +502,8 @@ Una vez tenemos todo configurado ( varibales de entorno = user , password, nombr
 
 `postgresql+psycopg://time-user:time-pw@hostvalue:5432/timescaledb`
 
+en el `hostvalue` tenemos que poner el nuestro servicio de bbdd. 
+
 responde a este standard;
 
 `dialect+driver://username:password@host:port/database`
@@ -529,5 +574,48 @@ el uso de expose:
 
 ### Variables de entorno
 
-Para cargar en los archivos python las variables de entorno usaremos un paquete llamado `python-decouple` Estas variables de entorno las podemos pasar desde el `docker compose`  - **NO** desde el archivo `.env` -. Independientemente donde esté con el paquete decouple la podemos cargar.
+Para cargar en los archivos python las variables de entorno usaremos un paquete llamado `python-decouple` Estas variables de entorno las podemos pasar desde el `docker compose`, si no las especificamos en el apartado(environment) :
 
+```Dockerfile
+services:
+  webapp-container-name:
+    image: analytics-api-my-image-name:v1
+    build:
+      context: .
+      dockerfile: Dockerfile-web
+    environment:
+      - PORT=8001
+      - DATABASE_URL=postgresql+psycopg://time-user:time-pw@db_service:5432/timescaledb
+```
+
+ las buscará en el archivo `.env`.
+
+La diferencia de poner las variables de entorno en el docker-compose o en un archivo .env es que en el dockercompose éstas se inyecan directamente y desde el código podemos acceder a ellas mediante 
+
+```python
+
+import os
+
+os.environ.get("DATABASE_URL")
+
+```
+### Uso de SQLModel
+
+SQLModel es una librería que combina pydantic (validación de modelos) con sqlalchemy persistencia en bbdd. Suena genial pero no nos permite aplicarlo en una arqutectura hexagonal, ya que necesitamos seguir usando pydantic para mantener separadas las capas e independecia de modelos de dominio de los modelos de infra. Si usamos SQLModel para dominio como este internamente depende de sqlalchemy estariamos introduciendo temas de bbdd en el dominio.
+
+un ejemplo de como insertar una table en la bbdd con SQLModel sigue tres pasos:
+
+1. Conectar con la bbdd usado un `database engine`, es decir permitir a python pueda llamar a sql
+
+2. una vez hecha la conexión tenemos q definir nuestro modelo y decirle q ese modelo se convertirá en una tabla
+
+```python
+from sqlmodel import Field, SQLModel
+
+
+class Hero(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    secret_name: str
+    age: int | None = None
+```
