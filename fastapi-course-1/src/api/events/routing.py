@@ -1,15 +1,19 @@
 from typing import Union
 
 from fastapi import APIRouter, Request, Depends, HTTPException
-from .schema import EventSchema, EventListSchema, EventCreateSchema, EventUpdateSchema
+from .models import EventSchema, EventListSchema, EventCreateSchema, EventUpdateSchema
 from decouple import config as decouple_config
+from api.db.config import DATABASE_URL
+
 router = APIRouter()
+
+
 
 MOCK_DATA = [EventSchema(id=1), EventSchema(id=2), EventSchema(id=3)]
 
 @router.get('/')
 def read_events() -> EventListSchema:
-    print(decouple_config("PORT_ENV", default=""))
+    print(DATABASE_URL)
     return EventListSchema(results=MOCK_DATA, count=len(MOCK_DATA))
 
 
