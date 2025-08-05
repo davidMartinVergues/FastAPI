@@ -62,9 +62,132 @@ uvicorn main:app --reload --host 127.0.0.1 --port 8000
 
 ## 🐳 2. Modo Docker (desarrollo o testing)
 
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```yml
+services:
+  webapp-container-name:
+    image: analytics-api-my-image-name:v1
+    build:
+      context: .
+      dockerfile: Dockerfile-web
+    env_file:
+      - .env
+    ports:
+      - "${PORT}:8001"
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - ./src:/code:rw
+    develop:
+      watch:
+        - action: rebuild
+          path: Dockerfile-web
+        - action: rebuild
+          path: requirements.txt
+        - action: rebuild
+          path: docker-compose.yaml
+  db_service:
+    image: timescale/timescaledb:latest-pg17
+    environment:
+      - POSTGRES_USER=time-user
+      - POSTGRES_PASSWORD=time-pw
+      - POSTGRES_DB=timescaledb
+    ports:
+      - "5434:5432"
+    expose:
+      - 5434
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+
+volumes:
+  timescaledb_data:
+
 ```
+
+```Dockerfile
+
+# 1 - Download & Install Python 3
+FROM python:3.13.2-slim-bullseye
+
+# setup linux os packages
+
+# 2 - Create Virtual Environment
+# 3 - Install Python Packages - `pip install <package-name>`
+# 4 - FastAPI Hello World
+
+
+# Create a virtual environment
+RUN python -m venv /opt/venv
+
+# Set the virtual environment as the current location
+ENV PATH=/opt/venv/bin:$PATH
+
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Set Python-related environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install os dependencies for our mini vm
+RUN apt-get update && apt-get install -y \
+    # for postgres
+    libpq-dev \
+    # for Pillow
+    libjpeg-dev \
+    # for CairoSVG
+    libcairo2 \
+    # other
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create the mini vm's code directory
+RUN mkdir -p /code
+
+# Set the working directory to that same code directory
+WORKDIR /code
+
+# Copy the requirements file into the container
+COPY requirements.txt /tmp/requirements.txt
+
+# copy the project code into the container's working directory
+COPY ./src /code
+
+# Install the Python project requirements
+RUN pip install -r /tmp/requirements.txt
+
+
+# make the bash script executable
+COPY ./boot/docker-run.sh /opt/run.sh
+RUN chmod +x /opt/run.sh
+
+# Clean up apt cache to reduce image size
+RUN apt-get remove --purge -y \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run the FastAPI project via the runtime script
+# when the container starts
+CMD ["/opt/run.sh"]
+```
+este dockerfile al final la instrucción ejecuta un .sh q levanta la app
+
+```bash 
+#!/bin/bash
+
+source /opt/venv/bin/activate
+
+cd /code
+RUN_PORT=${PORT:-8000}
+RUN_HOST=${HOST:-0.0.0.0}
+
+gunicorn -k uvicorn.workers.UvicornWorker -b $RUN_HOST:$RUN_PORT main:app
+```
+
+gunicorn se usa en prod (en este caso nosotros queremos q se parezca al máximo a prod así q tb lo utiliazaremos). Las variables con esta nomenclatura : `${PORT:-8000}` indica q si se encuentran esas variables de entorno se cargaran (para que las variables de entorno estén disponibles en el contenedor utilizamos la instrucción `env_file` del docker-compose) si no existe la variable de entorno utilizará lo q hay a la derecha del `:-`.
+
+
+**Si nos fijamos hay una contradicción pq en el compose tenemos la instrucción command que sobreescribe la instrucción de nuestro run.sh, por lo q no se estaría ejecutando el run.sh, tenemos q eliminar command cuando vayamos a producción**
+
 
 ## 🔍 ¿Qué significa cada parte?
 
@@ -126,7 +249,7 @@ gunicorn -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 main:app
 
 ## Docker & Docker Compose
 
-```dockerfile
+```yml
 services:
   webapp-container-name:
     image: analytics-api-my-image-name:v1
@@ -603,9 +726,13 @@ os.environ.get("DATABASE_URL")
 
 SQLModel es una librería que combina pydantic (validación de modelos) con sqlalchemy persistencia en bbdd. Suena genial pero no nos permite aplicarlo en una arqutectura hexagonal, ya que necesitamos seguir usando pydantic para mantener separadas las capas e independecia de modelos de dominio de los modelos de infra. Si usamos SQLModel para dominio como este internamente depende de sqlalchemy estariamos introduciendo temas de bbdd en el dominio.
 
+Si queremos mantener una arquitectura hexagonal podemos mantener nuestro archivo `schemas` hecho con pydantic (BaseModel) y crearemos otro archivo llamado `models` donde utilizaremos `SQLModel` para poder guardar las tablas en la bbdd.
+
+Si no podemos usar SQLModel para ambos propósitos y simplificarlo marcando solo aquellos modelos q queremos q se conviertan en tablas.
+
 un ejemplo de como insertar una table en la bbdd con SQLModel sigue tres pasos:
 
-1. Conectar con la bbdd usado un `database engine`, es decir permitir a python pueda llamar a sql
+1. Conectar con la bbdd usado un `database engine`, es decir permitir a python pueda llamar a sql table
 
 2. una vez hecha la conexión tenemos q definir nuestro modelo y decirle q ese modelo se convertirá en una tabla
 
@@ -619,3 +746,68 @@ class Hero(SQLModel, table=True):
     secret_name: str
     age: int | None = None
 ```
+
+en nuestro caso estabamos usando pydantic v2 q acepta un atributo de Field() llamado `examples` y le puedes pasar un array pero como SQLModel depende de pydantic v1 no acepta este atributo así q lo obviaremos:
+
+```python
+class EventSchema(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    page: Optional[str] = Field(
+        default="",
+        title="Event page",
+        description="The URL or slug of the event page.",
+        max_length=200,
+    )
+    description: Optional[str] = Field(
+            default="",
+            title="Event description",
+            description="description event",
+            max_length=200,
+        )
+```
+
+cuando queremos convertir un modelo en una tabla ponemos `table=True` y en su modelo tenemos q especificar q el campo id podrá ser None usando este instruccion : `id: Optional[int] = Field(default=None, primary_key=True)` xq de manera automática el comapo id lo genera SQLModel y es autoincrementar pero el primer registro antes de guardar en la base de datos, aún no hay un ID asignado. Y para que Python no se queje por no tener valor, el tipo debe permitir None.
+
+Una alternativa puede ser generar nosotros el id mediante el paquete uuid.
+
+```python
+class EventSchema(SQLModel, table=True):
+    id: uuid.UUID = Field(default=uuid.uuid4(), primary_key=True)
+    page: Optional[str] = Field(default="")
+    description: Optional[str] = Field(default="") 
+```
+
+3. FasAPI reconozca y se conecte a estas tablas en la bbdd
+
+
+Para que fastapi se pueda comunicar con ddbb necesitamos una instancia de un engine y necesitamos arrancarlo y usarlo en un lugar concreto de la app. El lugar para arrancarlo es el archivo principal de la app nuesto  `main.py`. Lo haremos como `lifespan method` de fastapi.
+
+Un `lifespan` (ciclo de vida) es el periodo entre que tu app FastAPI arranca y se apaga. FastAPI te permite engancharte a ese ciclo de vida para ejecutar lógica con un decorador o función especial, de ahí que los llamamos lifespan method. Anteriomente para ejecutar lógica en algíun punto del ciclo de vida de la app se hacia mediante la escucha de eventos.
+
+```python
+@app.on_event("startup")
+def  on_startup():
+  print("init method for db")
+```
+
+este modo ya està deprecated por lo q en lugar de usar eventos usaremos el `contextmanager`. Creamos un método lifespan  dnd iniciemos la db y se lo pasamos a la creación de la app.
+
+```python
+ from api.db.session import init_db
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    init_db()
+    yield
+    # shutdown
+    # some clean up code
+    print("shutdown method for db")
+```
+
+`yield` marca el punto de separación entre el código de "startup" y el código de "shutdown". Es decir:
+
+Todo lo que está antes del yield se ejecuta al arrancar la app (por ejemplo: inicializar la base de datos, cargar configuración, etc.).
+
+Todo lo que está después del yield se ejecuta al cerrarse la app (por ejemplo: cerrar conexiones, limpiar recursos, etc.).

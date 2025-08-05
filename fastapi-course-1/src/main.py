@@ -1,14 +1,30 @@
 from fastapi import FastAPI
 from typing import Union
 
+
 # from api.events.routing import router as events_router
 # le puedo quitar el .routing xq desde el __init__ ya lo exporto, por lo q podemos importar directeamente desde el paquete
 from api.events import router as events_router
+from api.db.session import init_db
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
+    init_db()
+    yield
+    # shutdown
+    # some clean up code
+    print("shutdown method for db")
+
+
+
+app = FastAPI(lifespan=lifespan)
 app.include_router(events_router, prefix='/api/events')
 
-
+# @app.on_event("startup")
+# def  on_startup():
+#   print("init method for db")
 
 @app.get("/")
 async def root():

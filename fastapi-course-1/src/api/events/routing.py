@@ -1,7 +1,7 @@
 from typing import Union
 
 from fastapi import APIRouter, Request, Depends, HTTPException
-from .models import EventSchema, EventListSchema, EventCreateSchema, EventUpdateSchema
+from .models import EventCreateSchema, EventUpdateSchema, EventModel, EventListSchema 
 from decouple import config as decouple_config
 from api.db.config import DATABASE_URL
 
@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 
-MOCK_DATA = [EventSchema(id=1), EventSchema(id=2), EventSchema(id=3)]
+MOCK_DATA = [EventModel(id=1), EventModel(id=2), EventModel(id=3)]
 
 @router.get('/')
 def read_events() -> EventListSchema:
@@ -18,16 +18,16 @@ def read_events() -> EventListSchema:
 
 
 @router.get("/{event_id}")
-def get_event(request: Request, event_id: int, query_params:EventSchema  = Depends(EventSchema)) -> EventSchema:
-# def get_event(request: Request, event_id: int, q: str | None = None) -> EventSchema:
-# def get_event(event_id: int, q : Union[str,None]=None) -> EventSchema:
+def get_event(request: Request, event_id: int, query_params:EventModel  = Depends(EventModel)) -> EventModel:
+# def get_event(request: Request, event_id: int, q: str | None = None) -> EventModel:
+# def get_event(event_id: int, q : Union[str,None]=None) -> EventModel:
     print(query_params)
     print(request)
-    return EventSchema(id=event_id)
+    return EventModel(id=event_id)
 
 @router.post("/")
-def create_event(payload: EventCreateSchema) -> EventSchema:
-    new_event = EventSchema(id=payload.id,page=payload.page)
+def create_event(payload: EventModel) -> EventModel:
+    new_event = EventModel(id=payload.id,page=payload.page)
     MOCK_DATA.append(new_event)
     return new_event
 

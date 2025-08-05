@@ -1,4 +1,13 @@
+- [FastApi Platzi Course](#fastapi-platzi-course)
+  - [Descripcion](#descripcion)
+  - [SQLModel](#sqlmodel)
+  - [async vs sync](#async-vs-sync)
+  - [Update objects](#update-objects)
+  - [Cómo organizar nuestra app](#cómo-organizar-nuestra-app)
+  - [Transacciones en bbdd](#transacciones-en-bbdd)
 - [FastApi youtube Course - FastAPI Beyond CRUD](#fastapi-youtube-course---fastapi-beyond-crud)
+  - [install FastApi](#install-fastapi)
+  - [Create server](#create-server)
 - [FastApi youtube Course - Analytics api](#fastapi-youtube-course---analytics-api)
   - [🚀 Cómo levantar una aplicación FastAPI](#-cómo-levantar-una-aplicación-fastapi)
   - [🧪 1. Modo local (desarrollo)](#-1-modo-local-desarrollo)
@@ -37,6 +46,7 @@
     - [🔹 Varios valores simples:](#-varios-valores-simples)
   - [⚠️ Cuidado: sin `Body(...)` FastAPI lo busca en la query](#️-cuidado-sin-body-fastapi-lo-busca-en-la-query)
   - [✅ Conclusión](#-conclusión-2)
+  - [Request object](#request-object)
   - [Integrando bbdd postgres](#integrando-bbdd-postgres)
     - [Storing data using SQLModel](#storing-data-using-sqlmodel)
     - [Variables de entorno](#variables-de-entorno)
@@ -54,14 +64,435 @@
   - [backend deploy to heroku](#backend-deploy-to-heroku)
   - [frontend deploy to github Pages](#frontend-deploy-to-github-pages)
 
+# FastApi Platzi Course
+
+## Descripcion
+
+Fastapi se basa en dos frameworks :
+- starlette => nos facilita la creación de requets HTTP
+- pydantic => permite crear modelos de datos
+
+## Pydantic Settings 
+
+¿Para qué sirve?
+
+Gestionar configuración de la aplicación (BD, APIs, secretos) de forma segura y flexible.
+
+Componentes:
+
+1. BaseSettings: Clase base que lee configuración automáticamente
+2. SettingsConfigDict: Configura DÓNDE y CÓMO leer los valores
+
+Orden de prioridad:
+
+1. Variables de entorno del servidor (export USER_DB=...)
+2. Archivo .env 
+3. Valores por defecto en la clase
+
+Ejemplo práctico:
+
+```python
+class Settings(BaseSettings):
+    USER_DB: str = "default_user"  # ← Especificas QUÉ variables buscar
+
+    model_config = SettingsConfigDict(
+        env_file=".env"  # ← Le dices DÓNDE buscar
+    )
+```
+
+Ventajas:
+
+- Desarrollo: usa .env (fácil)
+- Producción: usa variables del servidor (seguro)
+- Validación: Pydantic valida tipos automáticamente
+- Un solo lugar: defines toda la config en una clase
+
+Resultado:
+```python
+settings = Settings()  # ← Instancia global lista para usar
+settings.USER_DB  # ← Valor final después de aplicar prioridades
+```
+
+En resumen: Una forma elegante de manejar configuración que se adapta automáticamente a diferentes
+entornos.
+
+Esto lo podemos hacer más complejo y añadir secciones para gestionar los settings de toda nuestra app
+
+```python
+from pydantic import BaseModel, Field, validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+from typing import Literal
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+class DatabaseConfig(BaseModel):
+    """Configuración de base de datos"""
+    host: str = "localhost"
+    port: int = 5432
+    user: str = ""
+    password: str = ""
+    name: str = ""
+    pool_size: int = Field(default=10, ge=1, le=50)
+    max_overflow: int = Field(default=20, ge=0, le=100)
+    echo: bool = False
+    
+    @property
+    def url(self) -> str:
+        return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+
+class RedisConfig(BaseModel):
+    """Configuración de Redis para cache"""
+    host: str = "localhost"
+    port: int = 6379
+    password: str = ""
+    db: int = 0
+    ttl: int = Field(default=3600, ge=1)  # TTL en segundos
+    
+    @property
+    def url(self) -> str:
+        if self.password:
+            return f"redis://:{self.password}@{self.host}:{self.port}/{self.db}"
+        return f"redis://{self.host}:{self.port}/{self.db}"
+
+class AppConfig(BaseModel):
+    """Configuración general de la aplicación"""
+    name: str = "FastAPI App"
+    version: str = "1.0.0"
+    debug: bool = False
+    secret_key: str = Field(..., min_length=32)
+    environment: Literal["development", "testing", "staging", "production"] = "development"
+    cors_origins: list[str] = ["http://localhost:3000"]
+    
+    @validator('secret_key')
+    def validate_secret_key(cls, v):
+        if len(v) < 32:
+            raise ValueError('SECRET_KEY debe tener al menos 32 caracteres')
+        return v
+
+class EmailConfig(BaseModel):
+    """Configuración para servicios de email"""
+    provider: Literal["sendgrid", "mailgun", "smtp"] = "smtp"
+    
+    # SendGrid
+    sendgrid_api_key: str = ""
+    
+    # SMTP
+    smtp_host: str = "localhost"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_tls: bool = True
+    
+    # General
+    from_email: str = "noreply@example.com"
+    from_name: str = "FastAPI App"
+
+class StripeConfig(BaseModel):
+    """Configuración de Stripe para pagos"""
+    publishable_key: str = ""
+    secret_key: str = ""
+    webhook_secret: str = ""
+    currency: str = "usd"
+    
+    @validator('secret_key')
+    def validate_stripe_key(cls, v):
+        if v and not v.startswith(('sk_test_', 'sk_live_')):
+            raise ValueError('Stripe secret key debe empezar con sk_test_ o sk_live_')
+        return v
+
+class SecurityConfig(BaseModel):
+    """Configuración de seguridad"""
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = Field(default=30, ge=1)
+    password_min_length: int = Field(default=8, ge=6)
+    max_login_attempts: int = Field(default=5, ge=1)
+    lockout_duration_minutes: int = Field(default=15, ge=1)
+
+class LoggingConfig(BaseModel):
+    """Configuración de logging por servicios"""
+    # Configuración general
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    max_size_mb: int = Field(default=10, ge=1)
+    backup_count: int = Field(default=5, ge=1)
+    
+    # Logs por servicio
+    auth_log: str = "logs/auth.log"
+    reservations_log: str = "logs/reservations.log"
+    payments_log: str = "logs/payments.log"
+    email_log: str = "logs/email.log"
+    database_log: str = "logs/database.log"
+    api_log: str = "logs/api.log"
+    errors_log: str = "logs/errors.log"
+    customers_log: str = "logs/customers.log"
+    
+    # Configuración específica por servicio
+    auth_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    payments_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "WARNING"
+    database_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "ERROR"
+    reservations_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    email_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "WARNING"
+    
+    @property
+    def loggers_config(self) -> dict:
+        """Configuración para múltiples loggers"""
+        return {
+            "auth": {
+                "file": self.auth_log,
+                "level": self.auth_level,
+                "format": f"[AUTH] {self.format}"
+            },
+            "reservations": {
+                "file": self.reservations_log,
+                "level": self.reservations_level,
+                "format": f"[RESERVATIONS] {self.format}"
+            },
+            "payments": {
+                "file": self.payments_log,
+                "level": self.payments_level,
+                "format": f"[PAYMENTS] {self.format}"
+            },
+            "email": {
+                "file": self.email_log,
+                "level": self.email_level,
+                "format": f"[EMAIL] {self.format}"
+            },
+            "database": {
+                "file": self.database_log,
+                "level": self.database_level,
+                "format": f"[DB] {self.format}"
+            },
+            "api": {
+                "file": self.api_log,
+                "level": self.level,
+                "format": f"[API] {self.format}"
+            },
+            "customers": {
+                "file": self.customers_log,
+                "level": self.level,
+                "format": f"[CUSTOMERS] {self.format}"
+            },
+            "errors": {
+                "file": self.errors_log,
+                "level": "ERROR",
+                "format": f"[ERROR] {self.format}"
+            }
+        }
+
+class Settings(BaseSettings):
+    """Configuración principal de la aplicación"""
+    
+    # Configuraciones anidadas
+    database: DatabaseConfig = DatabaseConfig()
+    redis: RedisConfig = RedisConfig()
+    app: AppConfig = AppConfig()
+    email: EmailConfig = EmailConfig()
+    stripe: StripeConfig = StripeConfig()
+    security: SecurityConfig = SecurityConfig()
+    logging: LoggingConfig = LoggingConfig()
+    
+    # Configuración del modelo
+    model_config = SettingsConfigDict(
+        env_file=[BASE_DIR / ".env", BASE_DIR / ".env.local"],
+        env_file_encoding="utf-8",
+        env_nested_delimiter="__",  # Para variables como DATABASE__HOST
+        case_sensitive=False,
+        extra="ignore"  # Ignora variables no definidas
+    )
+    
+    @property
+    def is_production(self) -> bool:
+        return self.app.environment == "production"
+    
+    @property
+    def is_development(self) -> bool:
+        return self.app.environment == "development"
+
+# Instancia global
+settings = Settings() 
+```
+## SQLModel
+Para convertir nuestros modelos en tablas debemos hacerlo así: 
+
+
+```python
+class Customer(CustomerBase, table=True):
+  id : uuid.UUID | None = Field(default=None, primary_key=True)
+```
+
+1. `table=True`
+2. Usando `Field()`cualquier campo q queramos que se guarde en la tabla tiene que llevar Field.
+
+## async vs sync 
+
+hay q tener en cuenta q para usar postgres como `async`:
+
+  1. instalar `asyncpg`
+  2. declarar la url como `f"postgresql://{self.USER_DB}:{self.PSW_DB}@{self.HOST_DB}:{self.PORT_DB}/{self.NAME_DB}"`
+hay q tener en cuenta q para usar postgres como `sync`:
+  3. en las consultas usar : `await` y `scalars()`.
+```python
+  async def list_customers(session:SessionDep_async):
+  result = await session.execute(select(Customer))
+  customers: list[Customer] = list(result.scalars().all())
+  return customers
+
+```
+
+  4. instalar `psycopg2`
+  5. declarar la url como `f"postgresql://{self.USER_DB}:{self.PSW_DB}@{self.HOST_DB}:{self.PORT_DB}/{self.NAME_DB}"`
+
+## Update objects
+
+Hay dos manera:
+
+1. crear un método para controlar qué atributos actualizamos (EL MEJOR MODO) 
+
+```python
+class CustomerBase(SQLModel):
+  name : str | None = Field(default= None, max_length=250)
+  age : int | None = Field(default= None, gt=0)
+  email : EmailStr| None = Field(default= None)
+  description: str | None = Field(default=None)
+
+  def get_updatable_fields(self)->dict:
+      updatable_fields={
+          "name",
+          "age",
+          "email",
+          "description"
+      }
+      return {k:v for k,v in self.model_dump().items() if getattr(self, k) and k in updatable_fields}
+
+
+# luego en el endpoint 
+
+@app.patch('/customers/{customer_id}', response_model=Customer)
+async def update_customers(customer_id:uuid.UUID,customer_data:CustomerUpdate,session:SessionDep):  
+    customer = session.get(Customer, customer_id)
+    if not customer:
+          raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+
+    for key, value in customer_data.get_updatable_fields().items():
+            setattr(customer, key, value)
+            
+    session.add(customer)
+    session.commit()
+    session.refresh(customer)
+    return customer
+
+```
+
+2. El otro modo usando las funcinoes built in de Fastapi
+
+```python
+@app.patch('/customers/{customer_id}', response_model=Customer)
+async def update_customers(customer_id:uuid.UUID,customer_data:CustomerUpdate,session:SessionDep):  
+    customer = session.get(Customer, customer_id)
+    if not customer:
+          raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    
+    # solo actualiza si se lo pasamos en el body ese atributo 
+    customer.sqlmodel_update(customer_data.model_dump(exclude_unset=True))            
+    
+    session.add(customer)
+    session.commit()
+    session.refresh(customer)
+    return customer 
+```
+
+
+## Cómo organizar nuestra app 
+
+siguiendo esta estructura es la recomendada en la documentacion:
+
+![not found](img/2.png)
+
+## Transacciones en bbdd 
+
+para englobar varias operaciones en una misma transacción y poder hacer rollback en el caso q alguna salga mal podemos hacer :
+
+1.   Método 1: Transaction Context Manager
+
+```python
+@router.post('/complex-transaction')
+async def complex_operation(session: SessionDep_async):
+    async with session.begin():  # Inicia transacción explícita
+        # Operación 1
+        customer = Customer(name="Test")
+        session.add(customer)
+
+        # Operación 2
+        transaction = Transaction(amount=100,customer_id=customer.id)
+        session.add(transaction)
+
+# Si cualquier operación falla, rollback automático
+# Si todo OK, commit automático al salir del context
+```
+
+2.  Decorator para Transacciones
+
+```python
+from functools import wraps
+
+def transactional(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        session = kwargs.get('session')
+        async with session.begin():
+            return await func(*args, **kwargs)
+    return wrapper
+
+@router.post('/decorated')
+@transactional
+async def operation_with_transaction(session: SessionDep_async):
+    # Todas las operaciones en una transacción
+    pass
+```
 
 
 # FastApi youtube Course - FastAPI Beyond CRUD 
 
 source : https://www.youtube.com/watch?v=TO4aQ3ghFOc&t=13s
 
+## install FastApi
 
+```
+pip install "fastapi[standard]"
+```
 
+## Create server
+
+```python
+from fastapi import FastAPI
+import uvicorn
+
+webapp = FastAPI()
+
+@webapp.get('/')
+async def read_root():
+    return {"message":"Hello World"}
+
+if __name__ == '__main__':
+    uvicorn.run('main:webapp', host="127.0.0.1", port=8000, reload=True) 
+```
+
+podemos ejecutar este app de fastapi de distintos modos 
+
+1. usando el `fasapi CLI`
+   1. `fastapi dev` o `fastapi dev main.py` => para indicar dnd instanciamos la app de FastAPI
+2. ajecutar desde el interprete de python añadiendo previamente el siguiente código `python main.py` 
+
+```python
+    if __name__ == '__main__':
+      uvicorn.run('main:webapp', host="127.0.0.1", port=8000, reload=True)
+```
+3. ejecutar desde consola con `uvicorn` con el siguiente comando. Tenemos que especificar la ruta al archivo, en mi caso main, donde se instancia la fastapi app y nombre de la instancia
+
+```bash
+uvicorn main:webapp --reload --host 127.0.0.1 --port 8000
+```
 
 # FastApi youtube Course - Analytics api
 
@@ -144,11 +575,9 @@ gunicorn -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 main:app
 - **Uvicorn**: desarrollo, testing local, recarga automática.
 - **Gunicorn + UvicornWorker**: producción, carga real, múltiples procesos, robustez.
 
-
-
 ## Docker & Docker Compose
 
-```dockerfile
+```yml
 services:
   webapp-container-name:
     image: analytics-api-my-image-name:v1
@@ -267,10 +696,11 @@ def create_item(name: str = Body(...), active: bool = Body(False)):
 
 ## ✅ Conclusión
 
-- Los **path params** se capturan por nombre.
-- Los **query params** pueden declararse por separado o agruparse en un `BaseModel` con `Depends`.
-- En **POST**, los datos complejos se capturan con un modelo Pydantic.
-- Para **valores simples** en el body, se debe usar `Body(...)`.
+- **GET**
+  - Los **path params** se capturan por nombre.
+  - Los **query params** pueden declararse por separado o agruparse en un `BaseModel` con `Depends`.
+- **POST**, los datos complejos se capturan con un modelo Pydantic.
+  - Para **valores simples** en el body, se debe usar `Body(...)`.
 
 ---
 
@@ -393,13 +823,13 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-class Item(BaseModel):
+class ItemModel(BaseModel):
     name: str
     price: float
     in_stock: bool = True
 
 @app.post("/items/")
-def create_item(item: Item):
+def create_item(item: ItemModel):
     return {"received": item}
 ```
 
@@ -510,6 +940,87 @@ def update_item(name: str):
 - Usa **modelos Pydantic** para peticiones complejas (JSON estructurado).
 - Usa `Body(...)` para **valores simples** en el cuerpo de la petición.
 - Para **actualizaciones parciales**, usa un modelo con campos `Optional[...]` y `exclude_unset=True`.
+
+## Request object
+
+```python
+from fastapi import FastAPI,Request
+
+ 
+@webapp.get('/greet_with_age/{name}')
+async def greet_name(request:Request, name:str = "User", age:int=0)->dict:
+    request_info = {
+        "method": request.method,
+        "url": str(request.url),
+        "base_url": str(request.base_url),
+        "headers": dict(request.headers),
+        "query_params": dict(request.query_params),
+        "path_params": request.path_params,
+        "client": request.client,
+        "cookies": request.cookies,
+    }
+    return {"message":f"Hello {name} you are {age} years old", "req":request_info}
+
+```
+en las peticiones de fastapi podemos extraer info de la request utilizando el objeto request. Aquí un ejemplo de todo lo q podría contener:
+
+puedo acceder a los headers directamente usando la funcion `Header`
+
+```python
+from fastapi import FastAPI,Request, Header
+
+@webapp.get('/greet_with_age/{name}')
+async def greet_name(
+  request:Request, 
+  name:str = "User", 
+  age:int=0,
+  accept : str = Header(None)
+  )->dict:
+    request_info = {
+        "Host": request.headers["host"],
+        "method": request.method,
+        "url": str(request.url),
+        "base_url": str(request.base_url),
+        "headers": dict(request.headers),
+        "query_params": dict(request.query_params),
+        "path_params": request.path_params,
+        "client": request.client,
+        "cookies": request.cookies,
+    }
+    return {"message":f"Hello {name} you are {age} years old", "req":request_info, "accept":accept}
+```
+
+```json
+{
+    "message": "Hello david you are 4 years old",
+    "req": {
+        "Host": "127.0.0.1:8000",
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/greet_with_age/david?age=4",
+        "base_url": "http://127.0.0.1:8000/",
+        "headers": {
+            "user-agent": "PostmanRuntime/7.44.1",
+            "accept": "*/*",
+            "postman-token": "078360ec-d0b2-42e1-96fb-c2aa540160ee",
+            "host": "127.0.0.1:8000",
+            "accept-encoding": "gzip, deflate, br",
+            "connection": "keep-alive"
+        },
+        "query_params": {
+            "age": "4"
+        },
+        "path_params": {
+            "name": "david"
+        },
+        "client": [
+            "127.0.0.1",
+            50028
+        ],
+        "cookies": {}
+    },
+    "accept": "*/*"
+}
+```
 
 
 ## Integrando bbdd postgres
