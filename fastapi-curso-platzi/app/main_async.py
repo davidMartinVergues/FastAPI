@@ -13,6 +13,8 @@ from app.transactions.transactions_router import router as transactions_router
 from app.routers.invoice import router as invoices_router
 from app.routers.home import router as home_router
 from app.users.user_router import router as examples_router
+from app.plans.plan_router import router as plans_router
+
 
 
 
@@ -39,6 +41,7 @@ app.include_router(transactions_router, tags=["transactions"], prefix="/v1")
 app.include_router(invoices_router, tags=["invoices"], prefix="/v1")
 app.include_router(home_router, tags=["home"], prefix="/v1")
 app.include_router(examples_router, tags=["users"], prefix="/v1")
+app.include_router(plans_router, tags=["plans"], prefix="/v1")
 
 
 

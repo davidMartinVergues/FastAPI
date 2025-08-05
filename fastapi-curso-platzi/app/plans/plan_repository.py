@@ -1,0 +1,36 @@
+from sqlmodel import select
+from db.db import IAsyncDatabaseRepository
+from models import Plan, PlanCreate
+import logging
+
+log_api = logging.getLogger("api")
+
+
+
+class PlanRepository(IAsyncDatabaseRepository):
+    async def list_plans(self)->list[Plan]:
+        """listar transactions"""
+        if not self.db:
+            raise ValueError("Database session not injected")
+        
+        plans = await self.db.execute(select(Plan))
+        return list(plans.scalars().all())
+    
+    async def create_plan(self, plan_data:PlanCreate)->Plan:
+        """crear transaction"""
+        if not self.db:
+            raise ValueError("Database session not injected")
+        
+        plan_db = Plan.model_validate(plan_data.model_dump())
+        log_api.error(F"{plan_db}")
+        self.db.add(plan_db)
+        await self.db.flush()
+        return plan_db
+        
+        
+        
+
+
+        
+
+        
