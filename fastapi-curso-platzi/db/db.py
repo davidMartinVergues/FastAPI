@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Annotated
+from typing import AsyncGenerator, Annotated, Any
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from fastapi import Depends
 from settings.settings import settings
@@ -6,7 +6,7 @@ from sqlmodel import SQLModel
 import logging
 from functools import wraps
 from contextvars import ContextVar
-from sqlalchemy.orm import Session
+from contextlib import asynccontextmanager
 
 
 log_api = logging.getLogger("api")
@@ -31,7 +31,27 @@ async_session_maker = async_sessionmaker(
     expire_on_commit=False,
 )
 
-current_session: ContextVar[Session | None] = ContextVar("current_session", default=None)
+# Context variable para almacenar la sesión actual
+current_session: ContextVar[AsyncSession | None] = ContextVar("current_session", default=None)
+
+
+# =============================================================================
+# SESSION CONTEXT MANAGEMENT (inspirado en sistema IATI)
+# =============================================================================
+
+def get_current_session() -> AsyncSession | None:
+    """Obtiene la sesión actual del contexto"""
+    return current_session.get()
+
+
+def set_current_session(session: AsyncSession) -> None:
+    """Establece la sesión en el contexto"""
+    current_session.set(session)
+
+
+def clear_current_session() -> None:
+    """Limpia la sesión del contexto"""
+    current_session.set(None)
 
 
 async def create_all_tables_async():
@@ -40,41 +60,95 @@ async def create_all_tables_async():
         await conn.run_sync(SQLModel.metadata.create_all)
     print("✅ Tables created successfully")
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """devuelve una session con manejo de errores"""
+# =============================================================================
+# SESSION MANAGERS
+# =============================================================================
+
+@asynccontextmanager
+async def session_manager():
+    """
+    Context manager transaccional inspirado en IATI pero async.
+    Provee un scope transaccional alrededor de una serie de operaciones.
+    """
+    existing_session = get_current_session()
+    if existing_session is not None:
+        yield existing_session
+        return
+
     async with async_session_maker() as session:
         try:
+            set_current_session(session)
             yield session
-        except Exception:
+            await session.commit()
+        except Exception as e:
             await session.rollback()
-            raise
+            raise e
         finally:
-            current_session.set(None)
-            await session.close()
+            clear_current_session()
 
-def transactional(func):
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """Generador de sesión para dependencia de FastAPI"""
+    async with session_manager() as session:
+        yield session
+
+# =============================================================================
+# REPOSITORY INJECTION SYSTEM (inspirado en IATI)
+# =============================================================================
+
+class IAsyncDatabaseRepository:
+    """Interface base para repositorios con acceso a DB async"""
+    def __init__(self):
+        self.db: AsyncSession | None = None
+
+    def set_session(self, db: AsyncSession):
+        """Inyecta la sesión en el repositorio"""
+        self.db = db
+
+
+async def _inject_session_into_instance(instance: Any, session: AsyncSession) -> None:
+    """Inyecta sesión en repositorios con acceso a base de datos"""
+    for attr_name in dir(instance):
+        attr = getattr(instance, attr_name)
+        if isinstance(attr, IAsyncDatabaseRepository):
+            attr.set_session(session)
+
+
+# =============================================================================
+# TRANSACTION DECORATORS
+# =============================================================================
+
+def with_transaction(func):
     """
-    Decorator que engloba la función en una transacción SQL.
-    - Requiere que la sesión sea inyectada en kwargs
-    - Hace commit automático si todo sale bien
-    - Hace rollback automático si hay alguna excepción
+    Decorator que provee un scope transaccional alrededor de un use case.
+    Inspirado en el sistema IATI pero adaptado para async.
+    Inyecta automáticamente sesiones en repositorios.
     """
     @wraps(func)
-    async def wrapper(*args, **kwargs):
-        # Verificar si hay una sesión inyectada en los kwargs
-        session = kwargs.get('session')
-        
-        if not session:
-            raise ValueError("transactional decorator requires 'session' to be injected in kwargs")
-        
-        try:
-            result = await func(*args, **kwargs)
-            await session.commit()
-            return result
-        except Exception:
-            await session.rollback()
-            raise
+    async def wrapper(self, *args, **kwargs):
+        async with session_manager() as session:
+            await _inject_session_into_instance(self, session)
+            return await func(self, *args, **kwargs)
     return wrapper
+
+
+# def transactional(func):
+#     """
+#     Decorator simple que usa la sesión actual del contexto.
+#     Si no existe sesión en el contexto, crea una nueva.
+#     """
+#     @wraps(func)
+#     async def wrapper(*args, **kwargs):
+#         session = get_current_session()
+        
+#         if session:
+#             # Si ya hay sesión en contexto, usarla
+#             return await func(*args, **kwargs)
+#         else:
+#             # Si no hay sesión, crear una nueva con transaction scope
+#             async with session_manager() as new_session:
+#                 return await func(*args, **kwargs)
+#     return wrapper
 
 
 

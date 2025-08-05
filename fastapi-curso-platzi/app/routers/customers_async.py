@@ -22,8 +22,6 @@ async def create_customer(customer:CustomerCreate, session:SessionDep_async):
     session.add(_customer)
     await session.commit()
     await session.refresh(_customer)
-
-    
     return _customer
 
 @router.get('/customers', 

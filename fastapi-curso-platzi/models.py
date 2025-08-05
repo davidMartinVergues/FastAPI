@@ -40,10 +40,6 @@ class Transaction(TransactionBase, table=True):
 
 class TransactionCreate(TransactionBase):
     customer_id: uuid.UUID = Field(foreign_key="customer.id")
-
-
-
-
     
 class Invoice(BaseModel):
     id:int 
@@ -55,3 +51,18 @@ class Invoice(BaseModel):
         return sum(transaction.amount for transaction in self.transactions)
     
 
+class Users(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    name: str = Field(index=True)
+    email: str = Field(index=True)
+class UsersUpdate(BaseModel):
+    id: uuid.UUID|None = None
+    name: str |None = None
+    email: str|None = None
+
+    def updatbale_fields(self):
+        updatblae_fields={
+            "name",
+            "email"
+        }
+        return {k:v for k,v in self.model_dump().items() if getattr(self,k) and k in updatblae_fields}

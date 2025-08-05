@@ -5,6 +5,7 @@
   - [Update objects](#update-objects)
   - [Cómo organizar nuestra app](#cómo-organizar-nuestra-app)
   - [Transacciones en bbdd](#transacciones-en-bbdd)
+  - [relaciones many to many](#relaciones-many-to-many)
 - [FastApi youtube Course - FastAPI Beyond CRUD](#fastapi-youtube-course---fastapi-beyond-crud)
   - [install FastApi](#install-fastapi)
   - [Create server](#create-server)
@@ -450,6 +451,10 @@ async def operation_with_transaction(session: SessionDep_async):
     # Todas las operaciones en una transacción
     pass
 ```
+
+## relaciones many to many 
+
+Tenemos que crear una tabla intermedia entre dos tablas
 
 
 # FastApi youtube Course - FastAPI Beyond CRUD 
