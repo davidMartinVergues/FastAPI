@@ -23,8 +23,17 @@ class ColoredFormatter(logging.Formatter):
         color = self.COLORS.get(record.levelname, self.COLORS['ENDC'])
         return f"{color}{log_message}{self.COLORS['ENDC']}"
 
+# Flag global para evitar configuración múltiple
+_loggers_configured = False
+
 def setup_loggers():
     """Configura todos los loggers de la aplicación"""
+    global _loggers_configured
+    
+    # Si ya están configurados, no hacer nada
+    if _loggers_configured:
+        print("⚠️  Loggers ya configurados, omitiendo...")
+        return
 
     # Crear directorio logs si no existe
     os.makedirs("logs", exist_ok=True)
@@ -33,6 +42,10 @@ def setup_loggers():
     for logger_name, config in settings.logging.loggers_config.items():
         logger = logging.getLogger(logger_name)
         logger.setLevel(getattr(logging, config["level"]))
+
+        # Limpiar handlers existentes para evitar duplicación
+        for handler in logger.handlers[:]:
+            logger.removeHandler(handler)
 
         # Handler con rotación de archivos
         file_handler = RotatingFileHandler(
@@ -54,5 +67,9 @@ def setup_loggers():
         # Agregar ambos handlers
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)
+        
+        # Evitar propagación al root logger
+        logger.propagate = False
 
+    _loggers_configured = True
     print("✅ Loggers configurados correctamente")

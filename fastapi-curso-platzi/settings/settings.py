@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal, Any
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # ✔️ pathlib compatible

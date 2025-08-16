@@ -15,9 +15,6 @@ from app.routers.home import router as home_router
 from app.users.user_router import router as examples_router
 from app.plans.plan_router import router as plans_router
 
-
-
-
 setup_loggers()
 
 api_logger = logging.getLogger("api")
@@ -26,7 +23,7 @@ api_logger = logging.getLogger("api")
 async def lifespan(app: FastAPI):
     # startup
     await create_all_tables_async()
-    api_logger.warning("init method for db ASINCRONO")
+    api_logger.info("init method for db ASINCRONO")
     # create_all_tables(app)
     # api_logger.info("init method for db SINCRONO")
     yield

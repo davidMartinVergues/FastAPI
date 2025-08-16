@@ -15,6 +15,7 @@ class CustomerBase(SQLModel):
     email : EmailStr| None = Field(default= None)
     description: str | None = Field(default=None)
 
+
     def get_updatable_fields(self)->dict:
         updatable_fields={
             "name",
@@ -37,6 +38,18 @@ class Customer(CustomerBase, table=True):
     _transactions : list["Transaction"] = Relationship(back_populates="_customer")
     plans: list["Plan"] = Relationship(back_populates="_customers", link_model=CustomerPlan)
 
+class CustomerResponse(BaseModel):
+    id: uuid.UUID
+    name: str | None = None
+    email: EmailStr | None = None
+
+    @classmethod
+    def from_customer(cls,customer: Customer) -> 'CustomerResponse':
+          return cls(
+              id=customer.id,
+              name=customer.name,
+              email=customer.email,
+          )
 
 class TransactionBase(SQLModel):
     amount : float 
@@ -64,6 +77,7 @@ class Users(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     name: str = Field(index=True)
     email: str = Field(index=True)
+
 class UsersUpdate(BaseModel):
     id: uuid.UUID|None = None
     name: str |None = None
@@ -101,5 +115,23 @@ class PlanUpdate(PlanBase):
 
 class Plan(PlanBase, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    _customers: list['Customer'] = Relationship(back_populates="plans", link_model=CustomerPlan)
+    _customers: list['Customer'] = Relationship(back_populates="plans", link_model=CustomerPlan) 
+    # Los campos que empiezan con _ son considerados privados por Pydantic y no se incluyen en la serialización por defecto.
+
+class PlanResponse(BaseModel):
+    id: uuid.UUID
+    name:str | None = None
+    price: float | None = None
+    description: str | None = None
+    customers: list[CustomerResponse] = []
+
+    @classmethod
+    def from_plan(cls,plan: Plan) -> 'PlanResponse':
+          return cls(
+              id=plan.id,
+              name=plan.name,
+              price=plan.price,
+              description=plan.description,
+              customers=[CustomerResponse.from_customer(c) for c in plan._customers]
+          )
 
