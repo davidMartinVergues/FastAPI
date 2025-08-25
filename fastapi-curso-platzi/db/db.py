@@ -131,26 +131,5 @@ def with_transaction(func):
             return await func(self, *args, **kwargs)
     return wrapper
 
-
-# def transactional(func):
-#     """
-#     Decorator simple que usa la sesión actual del contexto.
-#     Si no existe sesión en el contexto, crea una nueva.
-#     """
-#     @wraps(func)
-#     async def wrapper(*args, **kwargs):
-#         session = get_current_session()
-        
-#         if session:
-#             # Si ya hay sesión en contexto, usarla
-#             return await func(*args, **kwargs)
-#         else:
-#             # Si no hay sesión, crear una nueva con transaction scope
-#             async with session_manager() as new_session:
-#                 return await func(*args, **kwargs)
-#     return wrapper
-
-
-
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 

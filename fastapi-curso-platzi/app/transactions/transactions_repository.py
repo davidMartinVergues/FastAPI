@@ -1,16 +1,20 @@
 from sqlmodel import select
 from db.db import IAsyncDatabaseRepository
 from models import Customer, Transaction, TransactionCreate
+from sqlalchemy import func
+from fastapi_pagination.ext.sqlalchemy import paginate
+from sqlalchemy.orm import Query
+from fastapi_pagination import Page,Params
+from sqlalchemy.orm import selectinload,joinedload
 
 class TransactionsRepository(IAsyncDatabaseRepository):
-    async def list_transactions(self)->list[Transaction]:
+    async def list_transactions(self, page, size)->Page[Transaction]:
         """listar transactions"""
         if not self.db:
             raise ValueError("Database session not injected")
         
-        transactions = await self.db.execute(select(Transaction))
-
-        return list(transactions.scalars().all())
+        query = select(Transaction).options(selectinload(Transaction._customer))
+        return await paginate(self.db, query, Params(page=page,size=size))
     
     async def create_transaction(self, transaction_data:TransactionCreate):
         """crear transaction"""

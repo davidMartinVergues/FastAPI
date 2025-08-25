@@ -13,5 +13,5 @@ class TransactionsService:
         return await self.transactions_repo.create_transaction(transaction_data)
     
     @with_transaction
-    async def list_transactions(self):
-        return await self.transactions_repo.list_transactions()
+    async def list_transactions(self,page,size):
+        return await self.transactions_repo.list_transactions(page,size)

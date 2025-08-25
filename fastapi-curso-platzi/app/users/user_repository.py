@@ -90,7 +90,7 @@ class UserRepository(IAsyncDatabaseRepository):
         if not u:
             raise HTTPException(status_code=404, detail="Customer not found")
         
-        for key, value in user_to_update.updatbale_fields().items():
+        for key, value in user_to_update.updatable_fields().items():
             setattr(u, key, value)
         
         self.db.add(u)

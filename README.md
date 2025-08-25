@@ -6,6 +6,12 @@
   - [Cómo organizar nuestra app](#cómo-organizar-nuestra-app)
   - [Transacciones en bbdd](#transacciones-en-bbdd)
   - [relaciones many to many](#relaciones-many-to-many)
+  - [metodos para sqlALchemy](#metodos-para-sqlalchemy)
+- [✅ Verificar existencia](#-verificar-existencia)
+- [✅ Lista de objetos](#-lista-de-objetos)
+- [✅ Primer resultado (puede no existir)](#-primer-resultado-puede-no-existir)
+- [✅ Debe existir exactamente uno](#-debe-existir-exactamente-uno)
+- [✅ Query con múltiples columnas](#-query-con-múltiples-columnas)
 - [FastApi youtube Course - FastAPI Beyond CRUD](#fastapi-youtube-course---fastapi-beyond-crud)
   - [install FastApi](#install-fastapi)
   - [Create server](#create-server)
@@ -456,6 +462,53 @@ async def operation_with_transaction(session: SessionDep_async):
 
 Tenemos que crear una tabla intermedia entre dos tablas
 
+## metodos para sqlALchemy con async
+
+ Resumen completo de métodos para extraer resultados en SQLAlchemy:
+
+  Métodos scalar*() - Para una sola columna/objeto
+
+  | Método               | Devuelve            | Comportamiento                | Uso típico          |
+  | -------------------- | ------------------- | ----------------------------- | ------------------- |
+  | scalar()             | Primer valor o None | Primera columna, primera fila | Valores únicos      |
+  | scalar_one()         | Un valor            | Falla si no hay exactamente 1 | Validación estricta |
+  | scalar_one_or_none() | Un valor o None     | 0 o 1 resultado permitido     | Existe/no existe    |
+
+  Métodos scalars() - Para múltiples objetos
+
+  | Método                  | Devuelve      | Comportamiento                       | Uso típico                       |
+  | ----------------------- | ------------- | ------------------------------------ | -------------------------------- |
+  | scalars()               | Generador     | Todos los objetos de primera columna | Base para otros métodos          |
+  | scalars().first()       | Objeto o None | Primer resultado                     | Obtener uno, puede no existir    |
+  | scalars().all()         | Lista         | Todos los resultados                 | Listas de objetos                |
+  | scalars().one()         | Un objeto     | Falla si no hay exactamente 1        | Validación estricta              |
+  | scalars().one_or_none() | Objeto o None | 0 o 1 resultado permitido            | Alternativa a scalar_one_or_none |
+
+  Métodos básicos Result
+
+  | Método        | Devuelve   | Comportamiento        | Uso típico                     |
+  | ------------- | ---------- | --------------------- | ------------------------------ |
+  | first()       | Row o None | Primera fila completa | Queries con múltiples columnas |
+  | all()         | List[Row]  | Todas las filas       | Resultados complejos           |
+  | one()         | Row        | Exactamente una fila  | Validación estricta            |
+  | one_or_none() | Row o None | 0 o 1 fila            | Fila completa opcional         |
+
+  Casos de uso comunes:
+
+  # ✅ Verificar existencia
+  customer = result.scalar_one_or_none()  # Customer o None
+
+  # ✅ Lista de objetos  
+  customers = result.scalars().all()      # [Customer, Customer, ...]
+
+  # ✅ Primer resultado (puede no existir)
+  customer = result.scalars().first()    # Customer o None
+
+  # ✅ Debe existir exactamente uno
+  customer = result.scalar_one()         # Customer (falla si no existe)
+
+  # ✅ Query con múltiples columnas
+  row = result.first()                   # Row con múltiples campos
 
 # FastApi youtube Course - FastAPI Beyond CRUD 
 

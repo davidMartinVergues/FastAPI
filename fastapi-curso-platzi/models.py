@@ -1,13 +1,13 @@
-from pydantic import BaseModel,EmailStr
+from pydantic import BaseModel,EmailStr, field_validator
 import uuid
 from sqlmodel import SQLModel,Field, Relationship
-
+from app.customers.enums.customer_plan import CustomerPlanStatusEnum
 # Definir CustomerPlan PRIMERO
 class CustomerPlan(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     plan_id: uuid.UUID = Field(foreign_key="plan.id")
     customer_id: uuid.UUID  = Field(foreign_key="customer.id")
-
+    status:CustomerPlanStatusEnum = Field(default=CustomerPlanStatusEnum.ACTIVE)
 
 class CustomerBase(SQLModel):
     name : str | None = Field(default= None, max_length=250)
@@ -15,6 +15,15 @@ class CustomerBase(SQLModel):
     email : EmailStr| None = Field(default= None)
     description: str | None = Field(default=None)
 
+    '''
+    no vamos a hacer validaciones q requieran la bbdd en el modelo debemos hacerlo en el use_case o service
+    '''
+    # @field_validator("email")
+    # @classmethod
+    # def validate_email(cls,value):
+
+    #     return value
+        
 
     def get_updatable_fields(self)->dict:
         updatable_fields={
@@ -35,7 +44,7 @@ class CustomerUpdate(CustomerBase):
 
 class Customer(CustomerBase, table=True):
     id : uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    _transactions : list["Transaction"] = Relationship(back_populates="_customer")
+    _transactions : list["Transaction"] = Relationship(back_populates="_customer", cascade_delete=True)
     plans: list["Plan"] = Relationship(back_populates="_customers", link_model=CustomerPlan)
 
 class CustomerResponse(BaseModel):

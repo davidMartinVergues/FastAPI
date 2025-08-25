@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from sqlmodel import select
 from models import Customer, Transaction, TransactionCreate
 from app.transactions.transactions_service import TransactionsService
 from fastapi_restful.cbv import cbv
 from fastapi import APIRouter, Request
+from fastapi_pagination import Page
 
 router = APIRouter()
 
@@ -12,11 +13,12 @@ class TransactionRouter:
     def __init__(self):
         self.transaction_service = TransactionsService()
 
-    @router.get('/transactions-list', response_model=list[Transaction])
-    async def list_transactions(self, request: Request)->list[Transaction]:
+    @router.get('/transactions-list')
+    async def list_transactions(self, request: Request,page=1,size=10
+                                ) -> Page[Transaction]:
         transaction_service = TransactionsService()
         try:
-            return await transaction_service.list_transactions()
+            return await transaction_service.list_transactions(page,size)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 

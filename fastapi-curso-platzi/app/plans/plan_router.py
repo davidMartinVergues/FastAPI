@@ -18,7 +18,6 @@ class PlanRouter:
     async def list_plans(self, request: Request)->list[PlanResponse]:
 
         try:
-            
             data = await self.plan_service.list_plan()
             return [PlanResponse.from_plan(plan) for plan in data]
         except Exception as e:
