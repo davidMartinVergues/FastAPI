@@ -16,7 +16,8 @@ from app.users.user_router import router as examples_router
 from app.plans.plan_router import router as plans_router
 from app.customers.customer_router import router as customers_router
 from fastapi_pagination import add_pagination
-
+from middleware.log_request_time import LogRequestTimeMiddleware
+from middleware.log_reqests_headers import LogRequestHeadersMiddleware
 setup_loggers()
 
 api_logger = logging.getLogger("api")
@@ -45,6 +46,8 @@ app.include_router(home_router, tags=["home"], prefix="/v1")
 app.include_router(examples_router, tags=["users"], prefix="/v1")
 app.include_router(plans_router, tags=["plans"], prefix="/v1")
 
+app.add_middleware(LogRequestTimeMiddleware)
+app.add_middleware(LogRequestHeadersMiddleware)
 
 
 

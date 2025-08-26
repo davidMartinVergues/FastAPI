@@ -1,7 +1,10 @@
 from app.transactions.transactions_repository import TransactionsRepository
 from db.db import with_transaction
-from models import TransactionCreate
+from models import Transaction, TransactionCreate, TransactionResponse
+from fastapi_pagination import Page
+import logging
 
+log_api = logging.getLogger("api")
 
 
 class TransactionsService:
@@ -13,5 +16,12 @@ class TransactionsService:
         return await self.transactions_repo.create_transaction(transaction_data)
     
     @with_transaction
-    async def list_transactions(self,page,size):
-        return await self.transactions_repo.list_transactions(page,size)
+    async def list_transactions(self)->Page[TransactionResponse]:
+        transactions : Page[Transaction] = await self.transactions_repo.list_transactions()
+        return Page(
+          items=[TransactionResponse.from_transaction(item) for item in transactions.items],
+          total=transactions.total,
+          page=transactions.page,
+          size=transactions.size,
+          pages=transactions.pages
+        )

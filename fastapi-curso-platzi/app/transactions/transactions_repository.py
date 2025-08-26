@@ -6,15 +6,17 @@ from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import Query
 from fastapi_pagination import Page,Params
 from sqlalchemy.orm import selectinload,joinedload
+import logging
 
+log_api = logging.getLogger("api")
 class TransactionsRepository(IAsyncDatabaseRepository):
-    async def list_transactions(self, page, size)->Page[Transaction]:
+    async def list_transactions(self)->Page[Transaction]:
         """listar transactions"""
         if not self.db:
             raise ValueError("Database session not injected")
         
-        query = select(Transaction).options(selectinload(Transaction._customer))
-        return await paginate(self.db, query, Params(page=page,size=size))
+        query = select(Transaction).options(selectinload(Transaction._customer)) # type: ignore
+        return  await paginate(self.db, query)
     
     async def create_transaction(self, transaction_data:TransactionCreate):
         """crear transaction"""

@@ -19,6 +19,9 @@ class DatabaseConfig(BaseModel):
     @property
     def url_async(self) -> str:
         return f"postgresql+asyncpg://{self.USER_DB}:{self.PSW_DB}@{self.HOST_DB}:{self.PORT_DB}/{self.NAME_DB}"
+    @property
+    def url_async_test(self) -> str:
+        return "sqlite+aiosqlite:///:memory:"
     
     @property
     def url_sync(self) -> str:

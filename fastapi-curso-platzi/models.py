@@ -144,3 +144,18 @@ class PlanResponse(BaseModel):
               customers=[CustomerResponse.from_customer(c) for c in plan._customers]
           )
 
+class TransactionResponse(SQLModel):
+    id: uuid.UUID
+    amount:float | None = None
+    description: str | None = None
+    customer: CustomerResponse | None = None
+
+    @classmethod
+    def from_transaction(cls,transaction: Transaction) -> 'TransactionResponse':
+          return cls(
+            id=transaction.id,
+            amount=transaction.amount,
+            description=transaction.description,
+            customer=CustomerResponse.from_customer(transaction._customer)
+          )
+

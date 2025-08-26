@@ -6,7 +6,7 @@
   - [Cómo organizar nuestra app](#cómo-organizar-nuestra-app)
   - [Transacciones en bbdd](#transacciones-en-bbdd)
   - [relaciones many to many](#relaciones-many-to-many)
-  - [metodos para sqlALchemy](#metodos-para-sqlalchemy)
+  - [metodos para sqlALchemy con async](#metodos-para-sqlalchemy-con-async)
 - [✅ Verificar existencia](#-verificar-existencia)
 - [✅ Lista de objetos](#-lista-de-objetos)
 - [✅ Primer resultado (puede no existir)](#-primer-resultado-puede-no-existir)
@@ -1430,6 +1430,10 @@ async def read_root():
 
 
 ```
+
+**Los middleware son funciones de python q se ejecutam amntes y después de cada request.**
+
+Uno de los middleware más comunes es el de CORS validation, es una función que valida q todas las requests q entran provienen del dominio deseado.
 
 middleware `cors` stands for cross origin resource sharing. We must use it coz we run a front-end JS server and another server using fastAPI in the back-end, so front-end and back-end are in a different origin - is a combination of protocol domain (http https) and port. So react will have port 3000 and fastAPI 8000 so we will need some sort of permission for backend interact with a different origin, different port
 

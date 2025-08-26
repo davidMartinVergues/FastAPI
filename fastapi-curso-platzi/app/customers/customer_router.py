@@ -51,10 +51,12 @@ class CustomerRouter:
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
-    @router.get('/customers/{customer_id}', status_code=201, response_model=Customer)
+    @router.get('/customers/{customer_id}', status_code=200, response_model=Customer)
     async def get_customers(self, customer_id:uuid.UUID):
             try:
                 return await self.customer_service.get_customers(customer_id)
+            except HTTPException as e:
+                 raise e 
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 
@@ -62,6 +64,7 @@ class CustomerRouter:
     async def get_customers_plans(self, customer_id:uuid.UUID):
             try:
                 return await self.customer_service.get_plans_by_customers(customer_id)
+            
             except Exception as e:
                 raise HTTPException(status_code=500, detail=str(e))
 

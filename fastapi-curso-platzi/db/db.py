@@ -75,6 +75,7 @@ async def session_manager():
         yield existing_session
         return
 
+
     async with async_session_maker() as session:
         try:
             set_current_session(session)

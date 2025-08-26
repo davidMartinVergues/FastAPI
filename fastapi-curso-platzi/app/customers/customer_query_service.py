@@ -26,6 +26,7 @@ class CustomerQueryService(IAsyncDatabaseRepository):
         # return customer
   
         result = await self.db.execute(select(Customer).where(Customer.id ==customer_id)) # type: ignore
+
         customer = result.scalar_one_or_none()
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
@@ -34,7 +35,7 @@ class CustomerQueryService(IAsyncDatabaseRepository):
     async def get_plans_by_customers(self,customer_id:uuid.UUID):
         result = await self.db.execute(# type: ignore
             select(Customer)
-            .options(selectinload(Customer.plans))
+            .options(selectinload(Customer.plans)) # type: ignore
             .where(Customer.id == customer_id)
         )
         customer_db = result.scalar_one_or_none()
@@ -42,8 +43,6 @@ class CustomerQueryService(IAsyncDatabaseRepository):
         if not customer_db:
             raise HTTPException(status_code=404, detail="Customer not found")
         
-        log_api.error(f"este es el customer : {customer_db.plans}")
-
         return customer_db.plans
 
     async def get_customer_plans_by_status(self,customer_id:uuid.UUID, status:CustomerPlanStatusEnum):
